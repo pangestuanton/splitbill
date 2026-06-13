@@ -54,6 +54,7 @@ export function HomepageReceiptReview({ scannedResult, onConfirm, onCancel }: Ho
   const [paidBy, setPaidBy] = useState('Saya');
   // Default participant names
   const [defaultParticipants, setDefaultParticipants] = useState<string[]>(['Saya', 'Teman 1', 'Teman 2']);
+  const [itemParticipantNames, setItemParticipantNames] = useState<string[][]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +65,8 @@ export function HomepageReceiptReview({ scannedResult, onConfirm, onCancel }: Ho
     if (tempMembers.length > 0 && !tempMembers.includes(paidBy)) {
       setPaidBy(tempMembers[0]);
     }
-  }, [tempMembers]);
+    setItemParticipantNames(items.map(() => tempMembers.slice()));
+  }, [tempMembers, items]);
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +111,7 @@ export function HomepageReceiptReview({ scannedResult, onConfirm, onCancel }: Ho
 
   const handleRemoveItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
+    setItemParticipantNames((prev) => prev.filter((_, i) => i !== index));
   };
 
   const toggleParticipant = (name: string) => {
@@ -117,6 +120,16 @@ export function HomepageReceiptReview({ scannedResult, onConfirm, onCancel }: Ho
     } else {
       setDefaultParticipants([...defaultParticipants, name]);
     }
+  };
+
+  const toggleItemParticipantName = (itemIndex: number, name: string) => {
+    setItemParticipantNames((prev) => {
+      const next = prev.map((row) => [...row]);
+      const selected = next[itemIndex] || [];
+      const found = selected.includes(name);
+      next[itemIndex] = found ? selected.filter((n) => n !== name) : [...selected, name];
+      return next;
+    });
   };
 
   const handleSaveSeparately = async () => {
@@ -145,11 +158,11 @@ export function HomepageReceiptReview({ scannedResult, onConfirm, onCancel }: Ho
       setIsSubmitting(true);
       setError(null);
 
-      const expensesToCreate = items.map((item) => ({
+      const expensesToCreate = items.map((item, idx) => ({
         title: item.name || 'Item Tanpa Nama',
         amount: item.amount,
         paidByMemberName: paidBy,
-        participantNames: defaultParticipants,
+        participantNames: itemParticipantNames[idx] && itemParticipantNames[idx].length > 0 ? itemParticipantNames[idx] : defaultParticipants,
       }));
 
       // Add tax and service if present
@@ -393,32 +406,53 @@ export function HomepageReceiptReview({ scannedResult, onConfirm, onCancel }: Ho
               </button>
             </div>
 
-            <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 mb-3">
+            <div className="max-h-[220px] overflow-y-auto space-y-3 pr-1 mb-3">
               {items.map((item, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <Input
-                    value={item.name}
-                    onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                    placeholder="Nama Item"
-                    className="text-[11px] rounded-xl flex-grow min-h-8 px-2.5"
-                    disabled={isSubmitting}
-                  />
-                  <Input
-                    type="number"
-                    value={item.amount === 0 ? '' : item.amount}
-                    onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
-                    placeholder="Harga"
-                    className="text-[11px] rounded-xl w-20 min-h-8 px-2.5"
-                    disabled={isSubmitting}
-                  />
-                  <button
-                    onClick={() => handleRemoveItem(idx)}
-                    className="text-stone-400 hover:text-red-500 transition p-1 shrink-0"
-                    disabled={isSubmitting}
-                    title="Hapus"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                <div key={idx} className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      value={item.name}
+                      onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                      placeholder="Nama Item"
+                      className="text-[11px] rounded-xl flex-grow min-h-8 px-2.5"
+                      disabled={isSubmitting}
+                    />
+                    <Input
+                      type="number"
+                      value={item.amount === 0 ? '' : item.amount}
+                      onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
+                      placeholder="Harga"
+                      className="text-[11px] rounded-xl w-20 min-h-8 px-2.5"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      onClick={() => handleRemoveItem(idx)}
+                      className="text-stone-400 hover:text-red-500 transition p-1 shrink-0"
+                      disabled={isSubmitting}
+                      title="Hapus"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {tempMembers.map((name) => {
+                      const isChecked = itemParticipantNames[idx]?.includes(name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => toggleItemParticipantName(idx, name)}
+                          disabled={isSubmitting}
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold border transition ${
+                            isChecked ? 'border-green-200 bg-green-50 text-green-800' : 'border-stone-200 bg-white text-stone-600'
+                          }`}
+                        >
+                          {isChecked ? <Check size={10} /> : <span className="w-3" />}
+                          {name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>

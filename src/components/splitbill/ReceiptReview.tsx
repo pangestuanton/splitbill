@@ -43,6 +43,7 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
 
   const [paidBy, setPaidBy] = useState('');
   const [defaultParticipantIds, setDefaultParticipantIds] = useState<string[]>([]);
+  const [itemParticipantIds, setItemParticipantIds] = useState<string[][]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,8 +52,9 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
     if (members.length > 0) {
       setPaidBy(members[0].id);
       setDefaultParticipantIds(members.map((m) => m.id));
+      setItemParticipantIds(items.map(() => members.map((m) => m.id)));
     }
-  }, [members]);
+  }, [members, items]);
 
   // Calculate items sum
   const itemsSum = items.reduce((sum, item) => sum + item.amount, 0);
@@ -78,6 +80,7 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
 
   const handleRemoveItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
+    setItemParticipantIds((prev) => prev.filter((_, i) => i !== index));
   };
 
   const toggleParticipant = (id: string) => {
@@ -86,6 +89,17 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
     } else {
       setDefaultParticipantIds([...defaultParticipantIds, id]);
     }
+  };
+
+  const toggleItemParticipant = (itemIndex: number, memberId: string) => {
+    setItemParticipantIds((prev) => {
+      const next = prev.map((row) => [...row]);
+      const selected = next[itemIndex] || [];
+      const has = selected.includes(memberId);
+      const updated = has ? selected.filter((id) => id !== memberId) : [...selected, memberId];
+      next[itemIndex] = updated;
+      return next;
+    });
   };
 
   const handleSaveSeparately = async () => {
@@ -107,11 +121,11 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
       setError(null);
 
       // Create a list of expenses, one for each item
-      const expensesToCreate = items.map((item) => ({
+      const expensesToCreate = items.map((item, idx) => ({
         title: item.name || 'Item Tanpa Nama',
         amount: item.amount,
         paid_by_member_id: paidBy,
-        participantIds: defaultParticipantIds,
+        participantIds: itemParticipantIds[idx] && itemParticipantIds[idx].length > 0 ? itemParticipantIds[idx] : defaultParticipantIds,
       }));
 
       // Add tax/service/discount as separate expenses if they are present
@@ -282,30 +296,51 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
 
         <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
           {items.map((item, idx) => (
-            <div key={idx} className="flex gap-2 items-center">
-              <Input
-                value={item.name}
-                onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                placeholder="Nama Item"
-                className="text-xs rounded-xl flex-1 min-h-9 px-3"
-                disabled={isSubmitting}
-              />
-              <Input
-                type="number"
-                value={item.amount === 0 ? '' : item.amount}
-                onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
-                placeholder="Harga"
-                className="text-xs rounded-xl w-24 min-h-9 px-3"
-                disabled={isSubmitting}
-              />
-              <button
-                onClick={() => handleRemoveItem(idx)}
-                className="text-stone-400 hover:text-red-500 transition p-1 shrink-0"
-                disabled={isSubmitting}
-                title="Hapus"
-              >
-                <Trash2 size={14} />
-              </button>
+            <div key={idx} className="space-y-2 rounded-xl border border-stone-100 p-3">
+              <div className="flex gap-2 items-center">
+                <Input
+                  value={item.name}
+                  onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                  placeholder="Nama Item"
+                  className="text-xs rounded-xl flex-1 min-h-9 px-3"
+                  disabled={isSubmitting}
+                />
+                <Input
+                  type="number"
+                  value={item.amount === 0 ? '' : item.amount}
+                  onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
+                  placeholder="Harga"
+                  className="text-xs rounded-xl w-24 min-h-9 px-3"
+                  disabled={isSubmitting}
+                />
+                <button
+                  onClick={() => handleRemoveItem(idx)}
+                  className="text-stone-400 hover:text-red-500 transition p-1 shrink-0"
+                  disabled={isSubmitting}
+                  title="Hapus"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {members.map((member) => {
+                  const isChecked = itemParticipantIds[idx]?.includes(member.id);
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => toggleItemParticipant(idx, member.id)}
+                      disabled={isSubmitting}
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold border transition ${
+                        isChecked ? 'border-green-200 bg-green-50 text-green-800' : 'border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      {isChecked ? <Check size={10} /> : <span className="w-3" />}
+                      {member.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ))}
           {items.length === 0 && (
