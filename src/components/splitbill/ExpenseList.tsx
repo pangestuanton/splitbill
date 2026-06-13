@@ -159,18 +159,33 @@ export function ExpenseList({
                     />
                   </div>
                 </div>
-                <div>
+                 <div>
                   <label className="block text-[10px] font-bold text-stone-500 mb-1">Dibayar Oleh</label>
-                  <select
-                    value={editPaidBy}
-                    onChange={(e) => setEditPaidBy(e.target.value)}
-                    disabled={isSaving}
-                    className="w-full text-xs rounded-xl border border-stone-200 bg-white p-2.5 outline-none focus:border-green-400 text-stone-950"
-                  >
-                    {members.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex gap-2">
+                    <select
+                      value={editPaidBy}
+                      onChange={(e) => setEditPaidBy(e.target.value)}
+                      disabled={isSaving}
+                      className="flex-grow text-xs rounded-xl border border-stone-200 bg-white p-2.5 outline-none focus:border-green-400 text-stone-950"
+                    >
+                      {members.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (members.length > 0) {
+                          const randomIndex = Math.floor(Math.random() * members.length);
+                          setEditPaidBy(members[randomIndex].id);
+                        }
+                      }}
+                      className="px-2.5 rounded-xl border border-green-200 bg-green-50 text-green-800 hover:bg-green-100 font-bold text-[11px] shrink-0"
+                      title="Acak Pembayar"
+                    >
+                      🎲 Acak
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-stone-500 mb-1">Ditanggung Oleh</label>

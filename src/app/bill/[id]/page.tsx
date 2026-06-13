@@ -47,6 +47,11 @@ export default function BillDetailPage() {
   // Share link copy state
   const [shareCopied, setShareCopied] = useState(false);
 
+  // Roulette game state
+  const [isShuffling, setIsShuffling] = useState(false);
+  const [shuffledName, setShuffledName] = useState('');
+  const [winner, setWinner] = useState('');
+
   const loadData = async (showLoading = false) => {
     try {
       if (showLoading) setIsLoading(true);
@@ -389,6 +394,57 @@ export default function BillDetailPage() {
                 participants={membersWithBalances}
                 settlements={splitResult.settlements}
               />
+            )}
+
+            {/* Bill Roulette Section */}
+            {members.length >= 2 && (
+              <Card className="p-5 border-stone-200 bg-white space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🎲</span>
+                  <h3 className="font-black text-stone-900 text-sm">Roulette Pembayar (Game)</h3>
+                </div>
+                <p className="text-xs leading-relaxed text-stone-500">
+                  Bingung menentukan siapa yang harus membayar seluruh tagihan ini? Biarkan takdir memilih satu orang secara acak!
+                </p>
+                <Button
+                  onClick={() => {
+                    if (members.length > 0) {
+                      setIsShuffling(true);
+                      setWinner('');
+                      let count = 0;
+                      const interval = setInterval(() => {
+                        const tempRandom = members[Math.floor(Math.random() * members.length)];
+                        setShuffledName(tempRandom.name);
+                        count++;
+                        if (count > 12) {
+                          clearInterval(interval);
+                          setIsShuffling(false);
+                          const luckyWinner = members[Math.floor(Math.random() * members.length)];
+                          setShuffledName(luckyWinner.name);
+                          setWinner(luckyWinner.name);
+                        }
+                      }, 100);
+                    }
+                  }}
+                  className="w-full text-xs font-black min-h-10 border border-green-200 bg-green-50/50 text-green-800 hover:bg-green-50"
+                  disabled={isShuffling}
+                >
+                  {isShuffling ? 'Mengocok...' : '🎯 Kocok Satu Pembayar Sesi'}
+                </Button>
+                
+                {shuffledName && (
+                  <div className="rounded-2xl bg-stone-50 border border-stone-200 p-3 text-center transition">
+                    {isShuffling ? (
+                      <p className="text-xs font-bold text-stone-600 animate-pulse">🎯 {shuffledName}</p>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-stone-400">🎉 Anggota Terpilih:</p>
+                        <p className="text-sm font-black text-green-700">{winner}! 🎉</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
             )}
           </div>
         </div>

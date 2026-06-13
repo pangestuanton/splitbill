@@ -143,19 +143,34 @@ export function ExpenseForm({ members, onSubmitExpense, disabled = false }: Expe
           <label className="block text-xs font-bold text-stone-600 mb-1">
             Dibayar Oleh
           </label>
-          <select
-            value={paidBy}
-            onChange={(e) => setPaidBy(e.target.value)}
-            className="min-h-11 w-full rounded-2xl border border-stone-200 bg-white px-3 text-stone-950 text-sm outline-none transition focus:border-green-400 focus:ring-4 focus:ring-green-500/15"
-            disabled={disabled || isSubmitting}
-            required
-          >
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex gap-2">
+            <select
+              value={paidBy}
+              onChange={(e) => setPaidBy(e.target.value)}
+              className="min-h-11 flex-grow rounded-2xl border border-stone-200 bg-white px-3 text-stone-950 text-sm outline-none transition focus:border-green-400 focus:ring-4 focus:ring-green-500/15"
+              disabled={disabled || isSubmitting}
+              required
+            >
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                if (members.length > 0) {
+                  const randomIndex = Math.floor(Math.random() * members.length);
+                  setPaidBy(members[randomIndex].id);
+                }
+              }}
+              className="px-4 rounded-2xl border border-green-200 bg-green-50 text-green-800 hover:bg-green-100 font-bold text-xs shrink-0 flex items-center gap-1 transition"
+              title="Acak Pembayar"
+            >
+              🎲 Acak
+            </button>
+          </div>
         </div>
       </div>
 
