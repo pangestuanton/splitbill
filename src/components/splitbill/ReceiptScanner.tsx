@@ -25,8 +25,43 @@ export function ReceiptScanner({ onScanCompleted, disabled = false }: ReceiptSca
     setError(null);
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setImage(reader.result as string);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Resize image if it exceeds 1024px to keep base64 size small and fast
+        const MAX_WIDTH = 1024;
+        const MAX_HEIGHT = 1024;
+        
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Compress quality to 70% JPEG
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setImage(dataUrl);
+        } else {
+          setImage(event.target?.result as string);
+        }
+      };
+      img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
@@ -55,7 +90,15 @@ export function ReceiptScanner({ onScanCompleted, disabled = false }: ReceiptSca
         body: JSON.stringify({ image }),
       });
 
-      const data = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const errorText = await response.text();
+        throw new Error(errorText || `Gagal menghubungi server (Status: ${response.status})`);
+      }
 
       if (!response.ok) {
         if (data.code === 'NO_API_KEY') {
