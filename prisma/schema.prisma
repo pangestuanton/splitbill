@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?  @unique
+  image     String?
+  bills     Bill[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Bill {
+  id            String        @id @default(cuid())
+  title         String
+  note          String?
+  currency      String        @default("IDR")
+  date          DateTime      @default(now())
+  taxRate       Float         @default(0)
+  serviceRate   Float         @default(0)
+  discountType  DiscountType  @default(FIXED)
+  discountValue Int           @default(0)
+  extraFee      Int           @default(0)
+  shareId       String?       @unique
+  ownerId       String?
+  owner         User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  participants  Participant[]
+  items         BillItem[]
+  settlements   Settlement[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Participant {
+  id          String       @id @default(cuid())
+  billId      String
+  bill        Bill         @relation(fields: [billId], references: [id], onDelete: Cascade)
+  name        String
+  colorKey    String?
+  paidItems   BillItem[]   @relation("PaidItems")
+  itemSplits  ItemSplit[]
+  fromSettles Settlement[] @relation("SettlementFrom")
+  toSettles   Settlement[] @relation("SettlementTo")
+  createdAt   DateTime     @default(now())
+}
+
+model BillItem {
+  id                  String       @id @default(cuid())
+  billId              String
+  bill                Bill         @relation(fields: [billId], references: [id], onDelete: Cascade)
+  name                String
+  price               Int
+  quantity            Int          @default(1)
+  paidByParticipantId String
+  paidBy              Participant  @relation("PaidItems", fields: [paidByParticipantId], references: [id], onDelete: Cascade)
+  splits              ItemSplit[]
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+}
+
+model ItemSplit {
+  id            String      @id @default(cuid())
+  itemId        String
+  item          BillItem    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  weight        Float       @default(1)
+
+  @@unique([itemId, participantId])
+}
+
+model Settlement {
+  id                String      @id @default(cuid())
+  billId            String
+  bill              Bill        @relation(fields: [billId], references: [id], onDelete: Cascade)
+  fromParticipantId String
+  fromParticipant   Participant @relation("SettlementFrom", fields: [fromParticipantId], references: [id], onDelete: Cascade)
+  toParticipantId   String
+  toParticipant     Participant @relation("SettlementTo", fields: [toParticipantId], references: [id], onDelete: Cascade)
+  amount            Int
+  createdAt         DateTime    @default(now())
+}
+
+enum DiscountType {
+  FIXED
+  PERCENT
+}
