@@ -183,6 +183,46 @@ export async function deleteExpense(expenseId: string) {
   return true;
 }
 
+export async function updateExpense(
+  expenseId: string,
+  expense: Partial<ExpenseInput>,
+  participantIds: string[]
+) {
+  // Update expense details
+  const { data, error } = await supabase
+    .from('expenses')
+    .update(expense)
+    .eq('id', expenseId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Clear existing participants
+  const { error: deleteError } = await supabase
+    .from('expense_participants')
+    .delete()
+    .eq('expense_id', expenseId);
+
+  if (deleteError) throw deleteError;
+
+  // Insert updated participants list
+  if (participantIds.length > 0) {
+    const participantsData = participantIds.map((memberId) => ({
+      expense_id: expenseId,
+      member_id: memberId,
+    }));
+
+    const { error: partError } = await supabase
+      .from('expense_participants')
+      .insert(participantsData);
+
+    if (partError) throw partError;
+  }
+
+  return data;
+}
+
 // Aggregate Query
 export async function getFullGroupData(groupId: string) {
   // 1. Fetch group details

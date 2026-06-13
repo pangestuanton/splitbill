@@ -24,6 +24,7 @@ import {
   deleteMember,
   createExpense,
   deleteExpense,
+  updateExpense,
 } from '@/lib/supabaseQueries';
 import { calculateGroupSplit } from '@/lib/splitBill';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -97,6 +98,15 @@ export default function BillDetailPage() {
 
   const handleDeleteExpense = async (expenseId: string) => {
     await deleteExpense(expenseId);
+    await loadData();
+  };
+
+  const handleUpdateExpense = async (
+    expenseId: string,
+    expense: { title: string; amount: number; paid_by_member_id: string },
+    participantIds: string[]
+  ) => {
+    await updateExpense(expenseId, expense, participantIds);
     await loadData();
   };
 
@@ -302,6 +312,7 @@ export default function BillDetailPage() {
                     members={members}
                     expenseParticipants={expenseParticipants}
                     onDeleteExpense={handleDeleteExpense}
+                    onUpdateExpense={handleUpdateExpense}
                   />
                 </div>
               </div>

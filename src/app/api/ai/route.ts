@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     let userPrompt = '';
 
     if (mode === 'whatsapp') {
-      systemPrompt = 'Anda adalah asisten keuangan yang membantu membuat pesan WhatsApp pembagian tagihan (split bill) yang sopan, rapi, dan mudah dibaca dalam Bahasa Indonesia. Gunakan format WhatsApp (seperti *teks tebal* untuk penekanan, emoji yang relevan). Angka harus tepat dan tidak boleh diubah.';
+      systemPrompt = 'Anda adalah asisten keuangan yang membantu membuat ringkasan pembagian tagihan (split bill) siap kirim ke WhatsApp yang rapi, to-the-point, dan mudah dibaca dalam Bahasa Indonesia. PENTING: JANGAN gunakan emoji sama sekali. JANGAN gunakan format tabel dalam bentuk teks. Angka harus tepat dan tidak boleh diubah.';
       userPrompt = `Buat pesan ringkasan split bill siap kirim ke WhatsApp untuk kegiatan berikut:
 Nama Acara/Grup: ${groupName}
 Total Tagihan: ${totalBillStr}
@@ -60,9 +60,9 @@ ${membersSummary}
 Penyelesaian Transfer:
 ${settlementsSummary}
 
-Pesan harus singkat, rapi, terstruktur, langsung ke poin utama transfer, dan ditutup dengan ucapan terima kasih yang ramah.`;
+Pesan harus sangat ringkas, langsung ke informasi utama transfer, to-the-point, bebas dari emoji, dan tidak menggunakan format tabel.`;
     } else {
-      systemPrompt = 'Anda adalah asisten yang menjelaskan hasil pembagian tagihan secara ringkas, ramah, dan bersahabat dalam Bahasa Indonesia. Angka harus tepat dan tidak boleh diubah.';
+      systemPrompt = 'Anda adalah asisten yang menjelaskan hasil pembagian tagihan secara ringkas, to-the-point, dan jelas dalam Bahasa Indonesia. PENTING: JANGAN gunakan emoji sama sekali. JANGAN gunakan format tabel dalam bentuk teks. Angka harus tepat dan tidak boleh diubah.';
       userPrompt = `Buat penjelasan ringkas (2-3 kalimat) mengenai hasil split bill berikut:
 Nama Acara/Grup: ${groupName}
 Total Tagihan: ${totalBillStr}
@@ -73,7 +73,7 @@ ${membersSummary}
 Penyelesaian Transfer:
 ${settlementsSummary}
 
-Jelaskan secara ringkas total tagihan dan siapa saja yang perlu menyelesaikan pembayaran agar semuanya lunas.`;
+Jelaskan secara langsung total tagihan dan siapa saja yang perlu menyelesaikan pembayaran agar semuanya lunas. Tulis dengan gaya to-the-point, bebas dari emoji, dan hindari format tabel.`;
     }
 
     const aiResponse = await callOpenRouter([
@@ -110,21 +110,21 @@ function generateLocalFallback(
       ? settlements.map((s) => `- *${s.fromName}* ➔ *${s.toName}*: *${formatCurrency(s.amount)}*`).join('\n')
       : '- Semua lunas! Tidak ada transfer diperlukan.';
 
-    return `📝 *TAGIHAN PATUNGAN: ${groupName.toUpperCase()}*
-💰 Total: *${totalBillStr}*
+    return `*TAGIHAN PATUNGAN: ${groupName.toUpperCase()}*
+Total: *${totalBillStr}*
 
-👥 *Rincian Patungan:*
+*Rincian Patungan:*
 ${memberLines}
 
-💸 *Penyelesaian Transfer:*
+*Penyelesaian Transfer:*
 ${settlementLines}
 
-Mohon segera diselesaikan ya teman-teman. Terima kasih! 🙏✨`;
+Mohon segera diselesaikan ya teman-teman. Terima kasih!`;
   } else {
     const settlementsText = settlements.length > 0
       ? settlements.map((s) => `${s.fromName} perlu membayar ${formatCurrency(s.amount)} ke ${s.toName}`).join(', ')
       : 'semua peserta sudah patungan dengan pas dan tidak ada transfer yang diperlukan';
 
-    return `Total tagihan untuk "${groupName}" adalah sebesar ${totalBillStr} di antara ${participants.length} orang. Berdasarkan perhitungan pembagian tagihan, penyelesaian pembayaran dapat dilakukan dengan cara: ${settlementsText}.`;
+    return `Total tagihan untuk "${groupName}" adalah sebesar ${totalBillStr} di antara ${participants.length} orang. Penyelesaian pembayaran dapat dilakukan dengan cara: ${settlementsText}.`;
   }
 }
