@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AlertTriangle, Plus, Trash2, Check, X, FileText, ArrowRight } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, Check, FileText, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -31,14 +31,16 @@ interface ReceiptReviewProps {
   onCancel: () => void;
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: ReceiptReviewProps) {
   const [merchant, setMerchant] = useState(scannedResult.merchant || 'Struk Belanja');
   const [items, setItems] = useState<ScannedItem[]>(scannedResult.items || []);
   const [tax, setTax] = useState(scannedResult.tax || 0);
   const [service, setService] = useState(scannedResult.service || 0);
   const [discount, setDiscount] = useState(scannedResult.discount || 0);
-  
-  // Total calculated from receipt level
   const receiptTotal = scannedResult.total || 0;
 
   const [paidBy, setPaidBy] = useState('');
@@ -46,46 +48,52 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
   const [itemParticipantIds, setItemParticipantIds] = useState<string[][]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const itemCount = items.length;
 
-  // Initialize selections
   useEffect(() => {
-    if (members.length > 0) {
-      setPaidBy(members[0].id);
-      setDefaultParticipantIds(members.map((m) => m.id));
-      setItemParticipantIds(items.map(() => members.map((m) => m.id)));
-    }
-  }, [members, items]);
+    const memberIds = members.map((member) => member.id);
+    if (memberIds.length === 0) return;
 
-  // Calculate items sum
+    setPaidBy((current) => (current && memberIds.includes(current) ? current : memberIds[0]));
+    setDefaultParticipantIds((current) => {
+      const valid = current.filter((id) => memberIds.includes(id));
+      return valid.length > 0 ? valid : memberIds;
+    });
+    setItemParticipantIds((current) =>
+      Array.from({ length: itemCount }, (_, index) => {
+        const valid = (current[index] || []).filter((id) => memberIds.includes(id));
+        return valid.length > 0 ? valid : memberIds;
+      }),
+    );
+  }, [members, itemCount]);
+
   const itemsSum = items.reduce((sum, item) => sum + item.amount, 0);
-  // Calculate total with tax/service/discount from OCR
   const calculatedTotal = itemsSum + tax + service - discount;
-
-  // Warning check: if sum of items + adjustments doesn't equal receipt total
   const showWarning = receiptTotal > 0 && Math.abs(calculatedTotal - receiptTotal) > 5;
 
-  const handleItemChange = (index: number, field: keyof ScannedItem, value: any) => {
+  const handleItemChange = (index: number, field: keyof ScannedItem, value: string) => {
     const updated = [...items];
     if (field === 'amount') {
       updated[index].amount = Math.max(0, Math.round(Number(value)) || 0);
     } else {
-      updated[index].name = String(value);
+      updated[index].name = value;
     }
     setItems(updated);
   };
 
   const handleAddItem = () => {
     setItems([...items, { name: 'Item Baru', amount: 0 }]);
+    setItemParticipantIds((current) => [...current, defaultParticipantIds]);
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
-    setItemParticipantIds((prev) => prev.filter((_, i) => i !== index));
+    setItems(items.filter((_, itemIndex) => itemIndex !== index));
+    setItemParticipantIds((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const toggleParticipant = (id: string) => {
     if (defaultParticipantIds.includes(id)) {
-      setDefaultParticipantIds(defaultParticipantIds.filter((pid) => pid !== id));
+      setDefaultParticipantIds(defaultParticipantIds.filter((participantId) => participantId !== id));
     } else {
       setDefaultParticipantIds([...defaultParticipantIds, id]);
     }
@@ -95,9 +103,10 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
     setItemParticipantIds((prev) => {
       const next = prev.map((row) => [...row]);
       const selected = next[itemIndex] || [];
-      const has = selected.includes(memberId);
-      const updated = has ? selected.filter((id) => id !== memberId) : [...selected, memberId];
-      next[itemIndex] = updated;
+      const hasMember = selected.includes(memberId);
+      next[itemIndex] = hasMember
+        ? selected.filter((id) => id !== memberId)
+        : [...selected, memberId];
       return next;
     });
   };
@@ -120,15 +129,13 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
       setIsSubmitting(true);
       setError(null);
 
-      // Create a list of expenses, one for each item
-      const expensesToCreate = items.map((item, idx) => ({
+      const expensesToCreate = items.map((item, index) => ({
         title: item.name || 'Item Tanpa Nama',
         amount: item.amount,
         paid_by_member_id: paidBy,
-        participantIds: itemParticipantIds[idx] && itemParticipantIds[idx].length > 0 ? itemParticipantIds[idx] : defaultParticipantIds,
+        participantIds: itemParticipantIds[index]?.length ? itemParticipantIds[index] : defaultParticipantIds,
       }));
 
-      // Add tax/service/discount as separate expenses if they are present
       if (tax > 0) {
         expensesToCreate.push({
           title: `Pajak Struk (${merchant})`,
@@ -139,25 +146,16 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
       }
       if (service > 0) {
         expensesToCreate.push({
-          title: `Biaya Layanan/Service Struk (${merchant})`,
+          title: `Biaya Layanan Struk (${merchant})`,
           amount: service,
           paid_by_member_id: paidBy,
           participantIds: defaultParticipantIds,
         });
       }
-      if (discount > 0) {
-        // Discounts are entered as negative values in logic, but expenses amount must be positive.
-        // Wait, for discount we could model it, but to keep logic simple:
-        // since expenses add to total, we can subtract discount from other item ratios or just create a negative amount?
-        // Wait, database constraint says amount >= 0. So we can't create a negative expense!
-        // To handle discount in "Separate Items" mode, we can deduct it proportionally from the items we create,
-        // or let the user apply it in Group settings later! The second option is much cleaner because Group settings has a direct discount field!
-        // So we will ignore discount here and instruct the user to configure the discount in the group settings.
-      }
 
       await onConfirm(expensesToCreate);
-    } catch (err: any) {
-      setError(err.message || 'Gagal menyimpan data.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Gagal menyimpan data.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -176,265 +174,279 @@ export function ReceiptReview({ scannedResult, members, onConfirm, onCancel }: R
     try {
       setIsSubmitting(true);
       setError(null);
-
-      // Create a single expense with the calculated total amount
       const finalAmount = calculatedTotal > 0 ? calculatedTotal : itemsSum;
 
-      const expensesToCreate = [
+      await onConfirm([
         {
           title: `Struk Belanja: ${merchant}`,
           amount: finalAmount,
           paid_by_member_id: paidBy,
           participantIds: defaultParticipantIds,
         },
-      ];
-
-      await onConfirm(expensesToCreate);
-    } catch (err: any) {
-      setError(err.message || 'Gagal menyimpan data.');
+      ]);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Gagal menyimpan data.'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-black text-stone-900 flex items-center gap-2">
-          <FileText className="text-green-600" size={20} />
-          Review Hasil Scan Struk
-        </h3>
-        <button
-          onClick={onCancel}
-          className="text-stone-400 hover:text-stone-600 transition"
-          disabled={isSubmitting}
-        >
-          <X size={20} />
-        </button>
-      </div>
+    <div className="space-y-5">
+      <section className="rounded-[32px] border border-green-200 bg-white p-5 shadow-[0_20px_60px_rgba(22,101,52,0.10)] sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-green-50 text-green-700">
+              <FileText size={22} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-green-700">Review scanner</p>
+              <h2 className="mt-1 text-2xl font-black text-stone-950">Review Hasil Scan Struk</h2>
+              <p className="mt-2 text-sm leading-6 text-stone-500">
+                Cek nama merchant, nominal, pembayar, dan siapa saja yang menanggung setiap item sebelum disimpan.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onCancel}
+            className="rounded-full p-2 text-stone-400 transition hover:bg-stone-100 hover:text-stone-600"
+            disabled={isSubmitting}
+            title="Tutup review"
+          >
+            <X size={20} />
+          </button>
+        </div>
+      </section>
 
       {error && (
-        <div className="rounded-xl bg-red-50 p-4 text-xs font-semibold text-red-600">
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-semibold text-red-700">
           {error}
         </div>
       )}
 
       {showWarning && (
-        <div className="flex gap-2.5 rounded-2xl bg-amber-50 p-4 text-xs leading-5 text-amber-800 border border-amber-200">
-          <AlertTriangle size={18} className="text-amber-600 shrink-0" />
-          <div>
+        <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+          <AlertTriangle size={18} className="shrink-0 text-amber-600" />
+                <div className="min-w-0">
             <span className="font-bold">Perhatian:</span> Total tagihan hasil scan (
-            <span className="font-bold">{formatCurrency(receiptTotal)}</span>) berbeda dengan jumlah hitungan item (
-            <span className="font-bold">{formatCurrency(calculatedTotal)}</span>). Anda dapat menyesuaikan harga item di bawah.
+            <span className="font-bold">{formatCurrency(receiptTotal)}</span>) berbeda dengan jumlah item (
+            <span className="font-bold">{formatCurrency(calculatedTotal)}</span>). Sesuaikan item di bawah bila perlu.
           </div>
         </div>
       )}
 
-      <Card className="space-y-3">
-        <div>
-          <label className="block text-xs font-bold text-stone-600 mb-1">
-            Nama Merchant / Struk
-          </label>
-          <Input
-            value={merchant}
-            onChange={(e) => setMerchant(e.target.value)}
-            placeholder="Contoh: Starbucks, Toko Makmur"
-            className="text-sm rounded-xl"
-            disabled={isSubmitting}
-          />
-        </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
+        <div className="space-y-5">
+          <Card className="space-y-4 p-5">
+            <div>
+              <label className="mb-1 block text-xs font-bold text-stone-600">Nama merchant / struk</label>
+              <Input
+                value={merchant}
+                onChange={(e) => setMerchant(e.target.value)}
+                placeholder="Contoh: Starbucks, Toko Makmur"
+                className="rounded-xl text-sm"
+                disabled={isSubmitting}
+              />
+            </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="block text-xs font-bold text-stone-600 mb-1">Pajak Struk (Rp)</label>
-            <Input
-              type="number"
-              value={tax === 0 ? '' : tax}
-              onChange={(e) => setTax(Math.max(0, Number(e.target.value)))}
-              placeholder="0"
-              className="text-sm rounded-xl"
-              disabled={isSubmitting}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-stone-600 mb-1">Service (Rp)</label>
-            <Input
-              type="number"
-              value={service === 0 ? '' : service}
-              onChange={(e) => setService(Math.max(0, Number(e.target.value)))}
-              placeholder="0"
-              className="text-sm rounded-xl"
-              disabled={isSubmitting}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-stone-600 mb-1">Diskon (Rp)</label>
-            <Input
-              type="number"
-              value={discount === 0 ? '' : discount}
-              onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
-              placeholder="0"
-              className="text-sm rounded-xl"
-              disabled={isSubmitting}
-            />
-          </div>
-        </div>
-      </Card>
-
-      <Card className="space-y-3">
-        <div className="flex items-center justify-between border-b border-stone-100 pb-2">
-          <h4 className="font-black text-stone-900 text-sm">Daftar Item Struk</h4>
-          <button
-            onClick={handleAddItem}
-            className="inline-flex items-center gap-1 text-xs font-bold text-green-700 hover:underline"
-            disabled={isSubmitting}
-          >
-            <Plus size={14} />
-            Tambah Item
-          </button>
-        </div>
-
-        <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
-          {items.map((item, idx) => (
-            <div key={idx} className="space-y-2 rounded-xl border border-stone-100 p-3">
-              <div className="flex gap-2 items-center">
-                <Input
-                  value={item.name}
-                  onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                  placeholder="Nama Item"
-                  className="text-xs rounded-xl flex-1 min-h-9 px-3"
-                  disabled={isSubmitting}
-                />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-bold text-stone-600">Pajak (Rp)</label>
                 <Input
                   type="number"
-                  value={item.amount === 0 ? '' : item.amount}
-                  onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
-                  placeholder="Harga"
-                  className="text-xs rounded-xl w-24 min-h-9 px-3"
+                  value={tax === 0 ? '' : tax}
+                  onChange={(e) => setTax(Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  className="rounded-xl text-sm"
                   disabled={isSubmitting}
                 />
-                <button
-                  onClick={() => handleRemoveItem(idx)}
-                  className="text-stone-400 hover:text-red-500 transition p-1 shrink-0"
-                  disabled={isSubmitting}
-                  title="Hapus"
-                >
-                  <Trash2 size={14} />
-                </button>
               </div>
-              <div className="flex flex-wrap gap-2 pt-1">
+              <div>
+                <label className="mb-1 block text-xs font-bold text-stone-600">Service (Rp)</label>
+                <Input
+                  type="number"
+                  value={service === 0 ? '' : service}
+                  onChange={(e) => setService(Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  className="rounded-xl text-sm"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-stone-600">Diskon (Rp)</label>
+                <Input
+                  type="number"
+                  value={discount === 0 ? '' : discount}
+                  onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  className="rounded-xl text-sm"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="space-y-4 p-5">
+            <div>
+              <label className="mb-1 block text-xs font-bold text-stone-600">Siapa yang membayar struk ini?</label>
+              <select
+                value={paidBy}
+                onChange={(e) => setPaidBy(e.target.value)}
+                className="min-h-12 w-full rounded-2xl border border-stone-200 bg-white px-3 text-sm text-stone-950 shadow-sm outline-none transition focus:border-green-400 focus:ring-4 focus:ring-green-500/15"
+                disabled={isSubmitting}
+                required
+              >
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-bold text-stone-600">
+                Penanggung default
+              </label>
+              <div className="flex flex-wrap gap-2 rounded-2xl border border-stone-200 bg-stone-50/70 p-2.5">
                 {members.map((member) => {
-                  const isChecked = itemParticipantIds[idx]?.includes(member.id);
+                  const isChecked = defaultParticipantIds.includes(member.id);
                   return (
                     <button
                       key={member.id}
                       type="button"
-                      onClick={() => toggleItemParticipant(idx, member.id)}
+                      onClick={() => toggleParticipant(member.id)}
                       disabled={isSubmitting}
-                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold border transition ${
-                        isChecked ? 'border-green-200 bg-green-50 text-green-800' : 'border-stone-200 bg-white text-stone-600'
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition ${
+                        isChecked
+                          ? 'border-green-200 bg-green-50 text-green-800'
+                          : 'border-stone-200 bg-white text-stone-600'
                       }`}
                     >
-                      {isChecked ? <Check size={10} /> : <span className="w-3" />}
+                      <span className={`flex size-3 items-center justify-center rounded-full border ${
+                        isChecked ? 'border-green-600 bg-green-600' : 'border-stone-300'
+                      }`}>
+                        {isChecked && <Check size={8} className="text-white" />}
+                      </span>
                       {member.name}
                     </button>
                   );
                 })}
               </div>
             </div>
-          ))}
-          {items.length === 0 && (
-            <p className="text-xs text-stone-400 text-center py-4">Belum ada item dalam daftar.</p>
-          )}
+          </Card>
         </div>
 
-        <div className="flex items-center justify-between border-t border-stone-100 pt-2 text-xs font-black text-stone-950">
-          <span>Subtotal Item:</span>
-          <span>{formatCurrency(itemsSum)}</span>
-        </div>
-        <div className="flex items-center justify-between text-xs font-black text-green-800">
-          <span>Total Akhir Struk (Termasuk Pajak/Servis/Diskon):</span>
-          <span>{formatCurrency(calculatedTotal)}</span>
-        </div>
-      </Card>
-
-      <Card className="space-y-3">
-        <div>
-          <label className="block text-xs font-bold text-stone-600 mb-1">
-            Siapa Yang Membayar Struk Ini?
-          </label>
-          <select
-            value={paidBy}
-            onChange={(e) => setPaidBy(e.target.value)}
-            className="min-h-11 w-full rounded-2xl border border-stone-200 bg-white px-3 text-stone-950 text-sm outline-none transition focus:border-green-400 focus:ring-4 focus:ring-green-500/15"
-            disabled={isSubmitting}
-            required
-          >
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-stone-600 mb-1">
-            Anggota Default Yang Menanggung Item
-          </label>
-          <div className="flex flex-wrap gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50/50">
-            {members.map((member) => {
-              const isChecked = defaultParticipantIds.includes(member.id);
-              return (
-                <button
-                  key={member.id}
-                  type="button"
-                  onClick={() => toggleParticipant(member.id)}
-                  disabled={isSubmitting}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold border transition ${
-                    isChecked
-                      ? 'border-green-200 bg-green-50 text-green-800'
-                      : 'border-stone-200 bg-white text-stone-600'
-                  }`}
-                >
-                  <span className={`size-3 rounded-full flex items-center justify-center border ${
-                    isChecked ? 'border-green-600 bg-green-600' : 'border-stone-300'
-                  }`}>
-                    {isChecked && <Check size={8} className="text-white" />}
-                  </span>
-                  {member.name}
-                </button>
-              );
-            })}
+        <Card className="space-y-4 p-5">
+          <div className="flex items-center justify-between gap-3 border-b border-stone-100 pb-3">
+            <div>
+              <h3 className="text-base font-black text-stone-950">Daftar item struk</h3>
+              <p className="mt-1 text-xs leading-5 text-stone-500">Edit harga dan pilih penanggung per item.</p>
+            </div>
+            <button
+              onClick={handleAddItem}
+              className="inline-flex min-h-9 items-center gap-1 rounded-xl border border-green-200 bg-green-50 px-3 text-xs font-bold text-green-800 transition hover:bg-green-100"
+              disabled={isSubmitting}
+            >
+              <Plus size={14} />
+              Item
+            </button>
           </div>
-        </div>
-      </Card>
 
-      <div className="flex flex-col gap-2 pt-2">
-        <Button
-          onClick={handleSaveSeparately}
-          disabled={isSubmitting}
-          className="w-full text-xs font-black min-h-11"
-        >
+          <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+            {items.map((item, index) => (
+              <article key={index} className="space-y-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_112px_auto] sm:items-center">
+                  <Input
+                    value={item.name}
+                    onChange={(e) => handleItemChange(index, 'name', e.target.value)}
+                    placeholder="Nama item"
+                    className="min-h-10 rounded-xl px-3 text-xs"
+                    disabled={isSubmitting}
+                  />
+                  <Input
+                    type="number"
+                    value={item.amount === 0 ? '' : item.amount}
+                    onChange={(e) => handleItemChange(index, 'amount', e.target.value)}
+                    placeholder="Harga"
+                    className="min-h-10 rounded-xl px-3 text-xs"
+                    disabled={isSubmitting}
+                  />
+                  <button
+                    onClick={() => handleRemoveItem(index)}
+                    className="rounded-xl p-2 text-stone-400 transition hover:bg-white hover:text-red-500"
+                    disabled={isSubmitting}
+                    title="Hapus"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {members.map((member) => {
+                    const isChecked = itemParticipantIds[index]?.includes(member.id);
+                    return (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => toggleItemParticipant(index, member.id)}
+                        disabled={isSubmitting}
+                        className={`inline-flex min-h-8 items-center gap-1 rounded-full border px-3 text-[11px] font-bold transition ${
+                          isChecked
+                            ? 'border-green-200 bg-green-50 text-green-800'
+                            : 'border-stone-200 bg-white text-stone-600'
+                        }`}
+                      >
+                        {isChecked ? <Check size={10} /> : <span className="w-2" />}
+                        {member.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </article>
+            ))}
+
+            {items.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-5 text-center">
+                <p className="text-sm font-bold text-stone-500">Belum ada item dalam daftar.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2 border-t border-stone-100 pt-4 text-sm">
+            <div className="flex items-center justify-between text-stone-500">
+              <span>Subtotal item</span>
+              <span className="font-bold">{formatCurrency(itemsSum)}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-2xl bg-green-50 p-3 font-black text-green-900">
+              <span>Total akhir struk</span>
+              <span>{formatCurrency(calculatedTotal)}</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-2 pt-2 sm:grid-cols-3">
+        <Button onClick={handleSaveSeparately} disabled={isSubmitting} className="w-full text-sm">
           Masukkan Sebagai Item Terpisah
         </Button>
-        
+
         <Button
           onClick={handleSaveAsOne}
           disabled={isSubmitting}
           variant="secondary"
-          className="w-full text-xs font-black min-h-11 border-green-200 text-green-800 bg-green-50/50"
+          className="w-full text-sm"
         >
-          Masukkan Sebagai Satu Tagihan Total
+          Masukkan Sebagai Satu Tagihan
         </Button>
 
         <Button
           onClick={onCancel}
           variant="ghost"
           disabled={isSubmitting}
-          className="w-full text-xs font-semibold min-h-10 text-stone-500 hover:bg-stone-50"
+          className="w-full text-sm text-stone-500"
         >
-          Batalkan & Tutup
+          Batalkan
         </Button>
       </div>
     </div>

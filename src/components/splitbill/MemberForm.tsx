@@ -24,8 +24,8 @@ export function MemberForm({ onAddMember, disabled = false }: MemberFormProps) {
       setIsSubmitting(true);
       await onAddMember(name.trim());
       setName('');
-    } catch (err: any) {
-      setError(err.message || 'Gagal menambahkan anggota.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menambahkan anggota.');
     } finally {
       setIsSubmitting(false);
     }
@@ -33,23 +33,23 @@ export function MemberForm({ onAddMember, disabled = false }: MemberFormProps) {
 
   return (
     <div className="space-y-2">
-      <form onSubmit={handleSubmit} className="flex gap-2">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nama teman (misal: Andi, Budi)"
           disabled={disabled || isSubmitting}
           maxLength={30}
-          className="min-h-11 flex-1 text-sm rounded-2xl"
+          className="flex-1 rounded-2xl text-sm"
           required
         />
         <Button
           type="submit"
           variant="primary"
-          className="min-h-11 rounded-2xl px-4"
+          className="rounded-2xl px-4 sm:w-auto"
           disabled={disabled || isSubmitting || !name.trim()}
         >
-          <Plus size={18} className="mr-1" />
+          <Plus size={18} />
           Tambah
         </Button>
       </form>

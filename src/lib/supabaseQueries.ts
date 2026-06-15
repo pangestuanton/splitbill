@@ -1,8 +1,9 @@
 import { supabase } from './supabase';
+import type { ExpenseParticipant } from '@/types';
 
 export interface GroupInput {
   name: string;
-  description?: string;
+  description?: string | null;
   tax_rate?: number;
   service_rate?: number;
   discount_type?: 'fixed' | 'percent';
@@ -254,7 +255,7 @@ export async function getFullGroupData(groupId: string) {
 
   // 4. Fetch all participants for these expenses
   const expenseIds = expenses.map((e) => e.id);
-  let expenseParticipants: any[] = [];
+  let expenseParticipants: ExpenseParticipant[] = [];
 
   if (expenseIds.length > 0) {
     const { data: parts, error: partsErr } = await supabase
@@ -272,6 +273,8 @@ export async function getFullGroupData(groupId: string) {
     .select('*')
     .eq('group_id', groupId)
     .order('created_at', { ascending: false });
+
+  if (scansErr) throw scansErr;
 
   return {
     group,

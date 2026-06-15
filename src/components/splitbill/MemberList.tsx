@@ -19,8 +19,8 @@ export function MemberList({ members, onDeleteMember, disabled = false }: Member
       setDeleteError(null);
       setDeletingId(id);
       await onDeleteMember(id);
-    } catch (err: any) {
-      setDeleteError(err.message || 'Gagal menghapus anggota.');
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Gagal menghapus anggota.');
     } finally {
       setDeletingId(null);
     }
@@ -28,9 +28,10 @@ export function MemberList({ members, onDeleteMember, disabled = false }: Member
 
   if (members.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-6 text-stone-400">
-        <Users size={28} className="stroke-1 text-stone-300" />
-        <p className="mt-2 text-xs">Belum ada anggota. Tambahkan teman di atas.</p>
+      <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50/80 p-6 text-center text-stone-400">
+        <Users size={28} className="mx-auto stroke-1 text-stone-300" />
+        <p className="mt-2 text-sm font-bold text-stone-500">Belum ada anggota.</p>
+        <p className="mt-1 text-xs">Tambahkan teman di atas untuk mulai membagi tagihan.</p>
       </div>
     );
   }
@@ -42,7 +43,7 @@ export function MemberList({ members, onDeleteMember, disabled = false }: Member
           {deleteError}
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {members.map((member) => {
           const initials = member.name
             .split(' ')
@@ -56,17 +57,17 @@ export function MemberList({ members, onDeleteMember, disabled = false }: Member
           return (
             <div
               key={member.id}
-              className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 py-1 pl-1.5 pr-2.5 text-sm font-semibold text-stone-700 shadow-sm transition hover:border-stone-300"
+              className="flex min-w-0 items-center gap-2 rounded-2xl border border-stone-200 bg-stone-50 px-2.5 py-2 text-sm font-semibold text-stone-700 shadow-sm transition hover:border-green-200 hover:bg-green-50/50"
             >
-              <span className="flex size-6 items-center justify-center rounded-full bg-green-100 text-[10px] font-black text-green-700">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-green-100 text-[11px] font-black text-green-700">
                 {initials}
               </span>
-              <span className="max-w-32 truncate">{member.name}</span>
+              <span className="min-w-0 flex-1 truncate">{member.name}</span>
               <button
                 type="button"
                 onClick={() => handleDelete(member.id)}
                 disabled={disabled || isDeleting}
-                className="text-stone-400 hover:text-red-600 disabled:opacity-50 transition"
+                className="rounded-full p-1.5 text-stone-400 transition hover:bg-white hover:text-red-600 disabled:opacity-50"
                 title="Hapus Anggota"
               >
                 <Trash2 size={14} className={isDeleting ? 'animate-pulse text-red-500' : ''} />

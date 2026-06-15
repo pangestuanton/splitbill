@@ -82,11 +82,11 @@ Jelaskan secara langsung total tagihan dan siapa saja yang perlu menyelesaikan p
     ], 0.3);
 
     return NextResponse.json({ result: aiResponse.trim(), isFallback: false });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('AI Summary Route Error:', error);
     return NextResponse.json(
       {
-        error: error.message || 'Gagal memproses ringkasan AI.',
+        error: error instanceof Error ? error.message : 'Gagal memproses ringkasan AI.',
         result: 'Gagal menghubungi asisten AI. Silakan gunakan salinan ringkasan lokal.',
       },
       { status: 500 },
@@ -107,7 +107,7 @@ function generateLocalFallback(
       .join('\n');
 
     const settlementLines = settlements.length > 0
-      ? settlements.map((s) => `- *${s.fromName}* ➔ *${s.toName}*: *${formatCurrency(s.amount)}*`).join('\n')
+      ? settlements.map((s) => `- *${s.fromName}* -> *${s.toName}*: *${formatCurrency(s.amount)}*`).join('\n')
       : '- Semua lunas! Tidak ada transfer diperlukan.';
 
     return `*TAGIHAN PATUNGAN: ${groupName.toUpperCase()}*

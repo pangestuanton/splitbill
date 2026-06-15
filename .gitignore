@@ -31,6 +31,8 @@ pnpm-debug.log*
 # misc
 .DS_Store
 *.pem
+.tmp-edge-profile/
+tmp-*.png
 
 # vercel
 .vercel

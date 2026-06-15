@@ -1,9 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Edit3, Share2, ArrowLeft, RefreshCw, Copy, Check } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Dice5,
+  Edit3,
+  RefreshCw,
+  ReceiptText,
+  Share2,
+  Sparkles,
+  UsersRound,
+} from 'lucide-react';
 import { Container } from '@/components/layout/Container';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -13,10 +23,10 @@ import { MemberForm } from '@/components/splitbill/MemberForm';
 import { MemberList } from '@/components/splitbill/MemberList';
 import { ExpenseForm } from '@/components/splitbill/ExpenseForm';
 import { ExpenseList } from '@/components/splitbill/ExpenseList';
-import { SettlementList } from '@/components/splitbill/SettlementList';
 import { AiSummaryCard } from '@/components/splitbill/AiSummaryCard';
 import { ReceiptScanner } from '@/components/splitbill/ReceiptScanner';
 import { ReceiptReview } from '@/components/splitbill/ReceiptReview';
+import { SplitResultPanel } from '@/components/splitbill/SplitResultPanel';
 
 import {
   getFullGroupData,
@@ -30,6 +40,26 @@ import { calculateGroupSplit } from '@/lib/splitBill';
 import { formatCurrency } from '@/lib/formatCurrency';
 import type { Group, Member, Expense, ExpenseParticipant } from '@/types';
 
+interface ScannedItem {
+  name: string;
+  amount: number;
+}
+
+interface ScannedReceiptResult {
+  merchant?: string | null;
+  date?: string | null;
+  items: ScannedItem[];
+  subtotal?: number;
+  tax?: number;
+  service?: number;
+  discount?: number;
+  total?: number;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function BillDetailPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
@@ -40,19 +70,13 @@ export default function BillDetailPage() {
   const [expenseParticipants, setExpenseParticipants] = useState<ExpenseParticipant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Scanner review flow state
-  const [scannedResult, setScannedResult] = useState<any | null>(null);
-
-  // Share link copy state
+  const [scannedResult, setScannedResult] = useState<ScannedReceiptResult | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
-
-  // Roulette game state
   const [isShuffling, setIsShuffling] = useState(false);
   const [shuffledName, setShuffledName] = useState('');
   const [winner, setWinner] = useState('');
 
-  const loadData = async (showLoading = false) => {
+  const loadData = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setIsLoading(true);
       setError(null);
@@ -61,17 +85,19 @@ export default function BillDetailPage() {
       setMembers(data.members);
       setExpenses(data.expenses);
       setExpenseParticipants(data.expenseParticipants);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || 'Gagal memuat data split bill.');
+      setError(getErrorMessage(err, 'Gagal memuat data split bill.'));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
-    if (id) loadData(true);
-  }, [id]);
+    if (id) {
+      void loadData(true);
+    }
+  }, [id, loadData]);
 
   const handleAddMember = async (name: string) => {
     await createMember(id, name);
@@ -109,14 +135,10 @@ export default function BillDetailPage() {
   const handleUpdateExpense = async (
     expenseId: string,
     expense: { title: string; amount: number; paid_by_member_id: string },
-    participantIds: string[]
+    participantIds: string[],
   ) => {
     await updateExpense(expenseId, expense, participantIds);
     await loadData();
-  };
-
-  const handleScanCompleted = (result: any) => {
-    setScannedResult(result);
   };
 
   const handleConfirmScan = async (
@@ -127,7 +149,6 @@ export default function BillDetailPage() {
       participantIds: string[];
     }>,
   ) => {
-    // Insert all expenses
     for (const exp of expensesToCreate) {
       await createExpense(
         {
@@ -154,9 +175,29 @@ export default function BillDetailPage() {
     }
   };
 
+  const handleRoulette = () => {
+    if (members.length === 0) return;
+
+    setIsShuffling(true);
+    setWinner('');
+    let count = 0;
+    const interval = window.setInterval(() => {
+      const tempRandom = members[Math.floor(Math.random() * members.length)];
+      setShuffledName(tempRandom.name);
+      count += 1;
+      if (count > 12) {
+        window.clearInterval(interval);
+        setIsShuffling(false);
+        const luckyWinner = members[Math.floor(Math.random() * members.length)];
+        setShuffledName(luckyWinner.name);
+        setWinner(luckyWinner.name);
+      }
+    }, 100);
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-stone-50 py-12">
+      <div className="min-h-screen py-12">
         <LoadingState message="Memuat data detail patungan..." />
       </div>
     );
@@ -164,7 +205,7 @@ export default function BillDetailPage() {
 
   if (error || !group) {
     return (
-      <div className="min-h-screen bg-stone-50 py-12">
+      <div className="min-h-screen py-12">
         <Container className="max-w-xl">
           <ErrorState
             title="Gagal Memuat Halaman"
@@ -177,24 +218,18 @@ export default function BillDetailPage() {
     );
   }
 
-  // Calculate calculations
   const splitResult = calculateGroupSplit(group, members, expenses, expenseParticipants);
+  const membersWithBalances = splitResult.participants.map((participant) => ({
+    name: participant.name,
+    totalOwed: participant.totalOwed,
+    paid: participant.paid,
+    balance: participant.balance,
+  }));
 
-  // Map member records to balance/summary info
-  const membersWithBalances = splitResult.participants.map((p) => {
-    return {
-      name: p.name,
-      totalOwed: p.totalOwed,
-      paid: p.paid,
-      balance: p.balance,
-    };
-  });
-
-  // If scanner review mode is active
   if (scannedResult) {
     return (
-      <main className="min-h-screen bg-stone-50 py-8">
-        <Container className="max-w-2xl">
+      <main className="min-h-screen py-8">
+        <Container className="max-w-3xl">
           <ReceiptReview
             scannedResult={scannedResult}
             members={members}
@@ -207,13 +242,12 @@ export default function BillDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-50 py-8">
-      <Container className="max-w-5xl">
-        {/* Navigation row */}
-        <div className="flex items-center justify-between mb-6">
+    <main className="min-h-screen py-8 sm:py-10">
+      <Container className="max-w-6xl">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm font-bold text-stone-500 hover:text-stone-700 transition"
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-stone-500 transition hover:text-green-700"
           >
             <ArrowLeft size={16} />
             Riwayat Sesi
@@ -222,7 +256,7 @@ export default function BillDetailPage() {
           <Button
             variant="ghost"
             onClick={() => loadData()}
-            className="min-h-9 px-3 rounded-xl gap-1 text-xs text-stone-500"
+            className="min-h-10 rounded-xl px-3 text-xs text-stone-500"
             title="Segarkan Data"
           >
             <RefreshCw size={14} />
@@ -230,21 +264,22 @@ export default function BillDetailPage() {
           </Button>
         </div>
 
-        {/* Hero Detail Group Card */}
-        <Card className="p-6 border-stone-200 bg-white mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <section className="mb-6 overflow-hidden rounded-[32px] border border-green-200/80 bg-white shadow-[0_20px_60px_rgba(22,101,52,0.10)]">
+          <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-start">
             <div>
-              <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-black text-green-700">
+              <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-black text-green-800">
+                <ReceiptText size={14} />
                 SplitBill Sesi
               </span>
-              <h1 className="mt-2 text-2xl sm:text-3xl font-black text-stone-900">{group.name}</h1>
+              <h1 className="mt-3 break-words text-3xl font-black tracking-tight text-stone-950 sm:text-4xl">
+                {group.name}
+              </h1>
               {group.description && (
-                <p className="mt-2 text-sm text-stone-500 leading-relaxed max-w-2xl">
-                  {group.description}
-                </p>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-500">{group.description}</p>
               )}
-              <p className="mt-1 text-[11px] text-stone-400">
-                Dibuat pada: {new Date(group.created_at).toLocaleDateString('id-ID', {
+              <p className="mt-3 text-xs font-semibold text-stone-400">
+                Dibuat pada{' '}
+                {new Date(group.created_at).toLocaleDateString('id-ID', {
                   day: 'numeric',
                   month: 'long',
                   year: 'numeric',
@@ -252,141 +287,114 @@ export default function BillDetailPage() {
               </p>
             </div>
 
-            <div className="flex gap-2 shrink-0">
+            <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
               <Link href={`/bill/${id}/edit`}>
-                <Button
-                  variant="secondary"
-                  className="min-h-10 rounded-xl px-3 text-xs gap-1.5 text-green-800 border-green-200 hover:bg-green-50 bg-green-50/20"
-                >
-                  <Edit3 size={14} />
+                <Button variant="secondary" className="w-full min-h-11 rounded-2xl text-sm">
+                  <Edit3 size={16} />
                   Edit Sesi
                 </Button>
               </Link>
 
-              <Button
-                onClick={handleCopyShareLink}
-                className="min-h-10 rounded-xl px-3 text-xs gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-              >
+              <Button onClick={handleCopyShareLink} className="w-full min-h-11 rounded-2xl text-sm">
                 {shareCopied ? (
                   <>
-                    <Check size={14} />
-                    Link Disalin!
+                    <Check size={16} />
+                    Link Disalin
                   </>
                 ) : (
                   <>
-                    <Share2 size={14} />
+                    <Share2 size={16} />
                     Bagikan
                   </>
                 )}
               </Button>
             </div>
           </div>
-        </Card>
 
-        {/* 2 Column Layout: Editor Form vs Summaries */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column (Inputs) */}
-          <div className="lg:col-span-7 space-y-6">
-            {/* Members Section */}
-            <Card className="p-5 border-stone-200 bg-white">
-              <h3 className="text-base font-black text-stone-900 mb-3 border-b border-stone-100 pb-2">
-                1. Anggota Kelompok
-              </h3>
-              <div className="space-y-4">
-                <MemberForm onAddMember={handleAddMember} />
-                <MemberList members={members} onDeleteMember={handleDeleteMember} />
+          <div className="grid gap-3 border-t border-stone-100 bg-stone-50/70 p-4 sm:grid-cols-3 sm:p-5">
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-400">Total saat ini</p>
+              <p className="mt-1 text-xl font-black text-stone-950">{formatCurrency(splitResult.total)}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-400">Anggota</p>
+              <p className="mt-1 text-xl font-black text-stone-950">{members.length} orang</p>
+            </div>
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-400">Item tagihan</p>
+              <p className="mt-1 text-xl font-black text-stone-950">{expenses.length} item</p>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
+          <div className="space-y-6 lg:col-span-7">
+            <Card className="space-y-5 p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-4 border-b border-stone-100 pb-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-green-50 text-green-700">
+                    <UsersRound size={20} />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="text-base font-black text-stone-950">1. Anggota kelompok</h2>
+                    <p className="mt-1 text-sm leading-6 text-stone-500">
+                      Tambahkan semua orang yang ikut patungan sebelum memasukkan item.
+                    </p>
+                  </div>
+                </div>
               </div>
+              <MemberForm onAddMember={handleAddMember} />
+              <MemberList members={members} onDeleteMember={handleDeleteMember} />
             </Card>
 
-            {/* AI Receipt Scanner Section */}
-            {members.length >= 2 && (
-              <ReceiptScanner onScanCompleted={handleScanCompleted} />
+            {members.length >= 2 ? (
+              <ReceiptScanner onScanCompleted={setScannedResult} />
+            ) : (
+              <Card className="border-dashed border-green-200 bg-green-50/60 p-5 text-center">
+                <Sparkles className="mx-auto text-green-700" size={24} />
+                <h3 className="mt-3 text-sm font-black text-green-950">Scanner aktif setelah ada 2 anggota</h3>
+                <p className="mt-1 text-xs leading-5 text-green-800/80">
+                  Tambahkan minimal dua anggota agar hasil scan struk bisa langsung dibagi.
+                </p>
+              </Card>
             )}
 
-            {/* Expenses Input & List Section */}
-            <Card className="p-5 border-stone-200 bg-white">
-              <h3 className="text-base font-black text-stone-900 mb-4 border-b border-stone-100 pb-2">
-                2. Daftar Tagihan / Item
-              </h3>
-              <div className="space-y-6">
-                <ExpenseForm members={members} onSubmitExpense={handleAddExpense} />
-                <div className="border-t border-stone-100 pt-4">
-                  <h4 className="font-bold text-stone-800 text-xs mb-3">Daftar Pengeluaran Terdaftar</h4>
-                  <ExpenseList
-                    expenses={expenses}
-                    members={members}
-                    expenseParticipants={expenseParticipants}
-                    onDeleteExpense={handleDeleteExpense}
-                    onUpdateExpense={handleUpdateExpense}
-                  />
+            <Card className="space-y-6 p-5 sm:p-6">
+              <div className="flex items-start gap-3 border-b border-stone-100 pb-4">
+                <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-green-50 text-green-700">
+                  <ReceiptText size={20} />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-base font-black text-stone-950">2. Daftar tagihan dan item</h2>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    Isi item manual atau review hasil scanner, lalu pilih pembayar dan penanggungnya.
+                  </p>
                 </div>
+              </div>
+
+              <ExpenseForm members={members} onSubmitExpense={handleAddExpense} />
+
+              <div className="border-t border-stone-100 pt-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-black text-stone-900">Pengeluaran terdaftar</h3>
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-black text-stone-500">
+                    {expenses.length} item
+                  </span>
+                </div>
+                <ExpenseList
+                  expenses={expenses}
+                  members={members}
+                  expenseParticipants={expenseParticipants}
+                  onDeleteExpense={handleDeleteExpense}
+                  onUpdateExpense={handleUpdateExpense}
+                />
               </div>
             </Card>
           </div>
 
-          {/* Right Column (Outputs / Results) */}
-          <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
-            {/* Split Result / Summary Calculations */}
-            <Card className="p-5 border-stone-200 bg-white">
-              <h3 className="text-base font-black text-stone-900 mb-4 border-b border-stone-100 pb-2">
-                3. Ringkasan & Hasil Patungan
-              </h3>
+          <div className="space-y-6 lg:col-span-5 lg:sticky lg:top-24">
+            <SplitResultPanel result={splitResult} />
 
-              {/* Green total card */}
-              <div className="leaf-gradient rounded-[22px] p-5 text-white shadow-md">
-                <p className="text-xs opacity-90 uppercase font-black tracking-wider">Total Tagihan Bersih</p>
-                <p className="mt-1 text-3xl font-black">{formatCurrency(splitResult.total)}</p>
-                <div className="mt-3 flex items-center justify-between text-[11px] opacity-90 border-t border-white/20 pt-2">
-                  <span>Subtotal: {formatCurrency(splitResult.subtotal)}</span>
-                  {splitResult.tax > 0 && <span>Pajak: {formatCurrency(splitResult.tax)}</span>}
-                  {splitResult.service > 0 && <span>Service: {formatCurrency(splitResult.service)}</span>}
-                  {splitResult.discount > 0 && <span>Diskon: -{formatCurrency(splitResult.discount)}</span>}
-                  {splitResult.extraFee > 0 && <span>Lain-lain: {formatCurrency(splitResult.extraFee)}</span>}
-                </div>
-              </div>
-
-              {/* Members Owed & Paid breakdown */}
-              {members.length > 0 && (
-                <div className="mt-5 space-y-2">
-                  <h4 className="font-bold text-stone-800 text-xs">Beban per Anggota:</h4>
-                  <div className="divide-y divide-stone-100">
-                    {splitResult.participants.map((p) => (
-                      <div key={p.participantId} className="flex justify-between items-center py-2 text-xs">
-                        <div className="min-w-0">
-                          <p className="font-bold text-stone-900 truncate">{p.name}</p>
-                          <p className="text-[10px] text-stone-400">
-                            Bayar: {formatCurrency(p.paid)} • Beban: {formatCurrency(p.totalOwed)}
-                          </p>
-                        </div>
-                        <span
-                          className={`font-black shrink-0 px-2 py-0.5 rounded-full text-[10px] ${
-                            p.balance > 0
-                              ? 'bg-green-100 text-green-800'
-                              : p.balance < 0
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-stone-100 text-stone-600'
-                          }`}
-                        >
-                          {p.balance > 0
-                            ? `Terima ${formatCurrency(p.balance)}`
-                            : p.balance < 0
-                            ? `Bayar ${formatCurrency(Math.abs(p.balance))}`
-                            : 'Lunas'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Settlement matching */}
-              <div className="mt-5 space-y-3">
-                <h4 className="font-bold text-stone-800 text-xs">Rekomendasi Transfer Penyelesaian:</h4>
-                <SettlementList settlements={splitResult.settlements} />
-              </div>
-            </Card>
-
-            {/* AI Text Summary Generator Card */}
             {members.length >= 2 && expenses.length >= 1 && (
               <AiSummaryCard
                 groupName={group.name}
@@ -396,50 +404,36 @@ export default function BillDetailPage() {
               />
             )}
 
-            {/* Bill Roulette Section */}
             {members.length >= 2 && (
-              <Card className="p-5 border-stone-200 bg-white space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🎲</span>
-                  <h3 className="font-black text-stone-900 text-sm">Roulette Pembayar (Game)</h3>
+              <Card className="space-y-4 p-5 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-green-50 text-green-700">
+                    <Dice5 size={20} />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black text-stone-950">Roulette pembayar</h3>
+                    <p className="mt-1 text-xs leading-5 text-stone-500">
+                      Fitur ringan untuk memilih satu orang secara acak jika kelompok ingin satu pembayar utama.
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs leading-relaxed text-stone-500">
-                  Bingung menentukan siapa yang harus membayar seluruh tagihan ini? Biarkan takdir memilih satu orang secara acak!
-                </p>
+
                 <Button
-                  onClick={() => {
-                    if (members.length > 0) {
-                      setIsShuffling(true);
-                      setWinner('');
-                      let count = 0;
-                      const interval = setInterval(() => {
-                        const tempRandom = members[Math.floor(Math.random() * members.length)];
-                        setShuffledName(tempRandom.name);
-                        count++;
-                        if (count > 12) {
-                          clearInterval(interval);
-                          setIsShuffling(false);
-                          const luckyWinner = members[Math.floor(Math.random() * members.length)];
-                          setShuffledName(luckyWinner.name);
-                          setWinner(luckyWinner.name);
-                        }
-                      }, 100);
-                    }
-                  }}
-                  className="w-full text-xs font-black min-h-10 border border-green-200 bg-green-50/50 text-green-800 hover:bg-green-50"
+                  onClick={handleRoulette}
+                  className="w-full min-h-11 border border-green-200 bg-green-50 text-sm text-green-800 hover:bg-green-100"
                   disabled={isShuffling}
                 >
-                  {isShuffling ? 'Mengocok...' : '🎯 Kocok Satu Pembayar Sesi'}
+                  {isShuffling ? 'Mengocok...' : 'Kocok satu pembayar'}
                 </Button>
-                
+
                 {shuffledName && (
-                  <div className="rounded-2xl bg-stone-50 border border-stone-200 p-3 text-center transition">
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-center">
                     {isShuffling ? (
-                      <p className="text-xs font-bold text-stone-600 animate-pulse">🎯 {shuffledName}</p>
+                      <p className="text-sm font-bold text-stone-600">{shuffledName}</p>
                     ) : (
-                      <div className="space-y-1">
-                        <p className="text-[10px] text-stone-400">🎉 Anggota Terpilih:</p>
-                        <p className="text-sm font-black text-green-700">{winner}! 🎉</p>
+                  <div className="min-w-0">
+                        <p className="text-xs font-bold text-stone-400">Anggota terpilih</p>
+                        <p className="mt-1 text-lg font-black text-green-700">{winner}</p>
                       </div>
                     )}
                   </div>

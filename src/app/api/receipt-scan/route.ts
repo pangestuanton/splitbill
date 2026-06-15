@@ -1,9 +1,30 @@
 import { NextResponse } from 'next/server';
 import { callOpenRouter } from '@/lib/openrouter';
 
+interface ReceiptScanRequest {
+  image?: string;
+}
+
+interface ParsedReceiptItem {
+  name?: unknown;
+  amount?: unknown;
+}
+
+interface ParsedReceiptData {
+  merchant?: unknown;
+  date?: unknown;
+  items?: ParsedReceiptItem[];
+  subtotal?: unknown;
+  tax?: unknown;
+  service?: unknown;
+  discount?: unknown;
+  total?: unknown;
+  confidence?: unknown;
+}
+
 export async function POST(request: Request) {
   try {
-    const { image } = await request.json();
+    const { image } = (await request.json()) as ReceiptScanRequest;
 
     if (!image) {
       return NextResponse.json({ error: 'Data gambar tidak ditemukan.' }, { status: 400 });
@@ -78,11 +99,11 @@ Perhatikan:
     }
 
     try {
-      const parsedData = JSON.parse(jsonText);
+      const parsedData = JSON.parse(jsonText) as ParsedReceiptData;
       
       // Basic sanitization
       if (parsedData && Array.isArray(parsedData.items)) {
-        parsedData.items = parsedData.items.map((item: any) => ({
+        parsedData.items = parsedData.items.map((item) => ({
           name: String(item.name || 'Item Tanpa Nama'),
           amount: Math.round(Number(item.amount)) || 0,
         }));
@@ -104,10 +125,10 @@ Perhatikan:
         { status: 500 },
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Receipt Scanner Route Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Gagal memindai gambar struk.' },
+      { error: error instanceof Error ? error.message : 'Gagal memindai gambar struk.' },
       { status: 500 },
     );
   }

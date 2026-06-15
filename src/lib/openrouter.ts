@@ -1,6 +1,12 @@
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string | any[];
+  content:
+    | string
+    | Array<
+        | { type: 'text'; text: string }
+        | { type: 'image_url'; image_url: { url: string } }
+        | Record<string, unknown>
+      >;
 }
 
 export async function callOpenRouter(messages: ChatMessage[], temperature = 0.3, maxTokens = 2000) {

@@ -5,17 +5,19 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 
+export interface GroupFormData {
+  name: string;
+  description: string | null;
+  tax_rate: number;
+  service_rate: number;
+  discount_type: 'fixed' | 'percent';
+  discount_value: number;
+  extra_fee: number;
+}
+
 interface GroupFormProps {
-  initialData?: {
-    name: string;
-    description: string | null;
-    tax_rate: number;
-    service_rate: number;
-    discount_type: 'fixed' | 'percent';
-    discount_value: number;
-    extra_fee: number;
-  };
-  onSubmit: (data: any) => Promise<void>;
+  initialData?: GroupFormData;
+  onSubmit: (data: GroupFormData) => Promise<void>;
   submitLabel?: string;
 }
 
@@ -49,8 +51,8 @@ export function GroupForm({ initialData, onSubmit, submitLabel = 'Simpan Grup' }
         discount_value: Number(discountValue) || 0,
         extra_fee: Number(extraFee) || 0,
       });
-    } catch (err: any) {
-      setError(err.message || 'Gagal menyimpan grup. Silakan coba lagi.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan grup. Silakan coba lagi.');
     } finally {
       setIsSubmitting(false);
     }
@@ -64,7 +66,15 @@ export function GroupForm({ initialData, onSubmit, submitLabel = 'Simpan Grup' }
         </div>
       )}
 
-      <Card className="space-y-4">
+      <Card className="space-y-5 p-5 sm:p-6">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-green-700">Detail sesi</p>
+          <h2 className="mt-1 text-lg font-black text-stone-950">Informasi dasar</h2>
+          <p className="mt-1 text-sm leading-6 text-stone-500">
+            Nama ini akan tampil di detail bill, riwayat, dan halaman share.
+          </p>
+        </div>
+
         <div>
           <label className="block text-sm font-bold text-stone-700 mb-1">
             Nama Kegiatan / Grup *
@@ -86,18 +96,22 @@ export function GroupForm({ initialData, onSubmit, submitLabel = 'Simpan Grup' }
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Tambahkan catatan singkat mengenai grup ini..."
-            className="min-h-20 w-full rounded-2xl border border-stone-200 bg-white p-4 text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-green-400 focus:ring-4 focus:ring-green-500/15 text-sm"
+            className="min-h-24 w-full rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-green-400 focus:ring-4 focus:ring-green-500/15 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-400"
             disabled={isSubmitting}
           />
         </div>
       </Card>
 
-      <Card className="space-y-4">
-        <h3 className="font-black text-stone-900 border-b border-stone-100 pb-2">
-          Biaya Tambahan & Diskon (Opsional)
-        </h3>
+      <Card className="space-y-5 p-5 sm:p-6">
+        <div className="border-b border-stone-100 pb-4">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-green-700">Opsional</p>
+          <h2 className="mt-1 text-lg font-black text-stone-950">Biaya tambahan dan diskon</h2>
+          <p className="mt-1 text-sm leading-6 text-stone-500">
+            Pajak, service, diskon, dan biaya lain akan masuk ke kalkulasi proporsional.
+          </p>
+        </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-xs font-bold text-stone-600 mb-1">
               Pajak (%)
@@ -129,15 +143,15 @@ export function GroupForm({ initialData, onSubmit, submitLabel = 'Simpan Grup' }
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 items-end">
-          <div className="col-span-1">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end">
+          <div>
             <label className="block text-xs font-bold text-stone-600 mb-1">
               Tipe Diskon
             </label>
             <select
               value={discountType}
               onChange={(e) => setDiscountType(e.target.value as 'fixed' | 'percent')}
-              className="min-h-11 w-full rounded-2xl border border-stone-200 bg-white px-3 text-stone-950 text-sm outline-none transition focus:border-green-400 focus:ring-4 focus:ring-green-500/15"
+              className="min-h-12 w-full rounded-2xl border border-stone-200 bg-white px-3 text-sm text-stone-950 shadow-sm outline-none transition focus:border-green-400 focus:ring-4 focus:ring-green-500/15"
               disabled={isSubmitting}
             >
               <option value="fixed">Rupiah (Rp)</option>
@@ -145,7 +159,7 @@ export function GroupForm({ initialData, onSubmit, submitLabel = 'Simpan Grup' }
             </select>
           </div>
 
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="block text-xs font-bold text-stone-600 mb-1">
               Nilai Diskon
             </label>
@@ -175,7 +189,7 @@ export function GroupForm({ initialData, onSubmit, submitLabel = 'Simpan Grup' }
         </div>
       </Card>
 
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
+      <Button type="submit" className="w-full" disabled={isSubmitting || !name.trim()}>
         {isSubmitting ? 'Memproses...' : submitLabel}
       </Button>
     </form>

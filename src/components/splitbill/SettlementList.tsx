@@ -9,8 +9,8 @@ interface SettlementListProps {
 export function SettlementList({ settlements }: SettlementListProps) {
   if (settlements.length === 0) {
     return (
-      <div className="rounded-2xl bg-green-50 p-4 text-center">
-        <p className="text-sm font-semibold text-green-800">
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-center">
+        <p className="text-sm font-bold text-green-800">
           Semua peserta sudah lunas! Tidak ada transfer yang perlu dilakukan.
         </p>
       </div>
@@ -18,24 +18,27 @@ export function SettlementList({ settlements }: SettlementListProps) {
   }
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       {settlements.map((settlement, index) => (
         <div
           key={`${settlement.fromParticipantId}-${settlement.toParticipantId}-${index}`}
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-2xl border border-green-200 bg-green-50/50 p-4 shadow-sm"
+          className="rounded-2xl border border-green-200 bg-green-50/70 p-4 shadow-sm"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="grid size-8 place-items-center rounded-xl bg-green-100 text-green-700 shrink-0">
-              <Wallet size={16} />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid size-9 shrink-0 place-items-center rounded-2xl bg-white text-green-700 shadow-sm">
+                <Wallet size={16} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-green-700">Transfer</p>
+                <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-black text-stone-900">
+                  <span className="max-w-[96px] truncate sm:max-w-[140px]">{settlement.fromName}</span>
+                  <ArrowRight size={14} className="shrink-0 text-green-700" />
+                  <span className="max-w-[96px] truncate sm:max-w-[140px]">{settlement.toName}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-stone-800 min-w-0">
-              <span className="truncate max-w-[100px] text-stone-900">{settlement.fromName}</span>
-              <ArrowRight size={14} className="text-stone-400 shrink-0" />
-              <span className="truncate max-w-[100px] text-stone-900">{settlement.toName}</span>
-            </div>
-          </div>
-          <div className="sm:text-right shrink-0">
-            <span className="text-base font-black text-green-950">
+            <span className="shrink-0 text-right text-base font-black text-green-950">
               {formatCurrency(settlement.amount)}
             </span>
           </div>

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Receipt, Calendar, ChevronRight, PlusCircle, ArrowLeft } from 'lucide-react';
+import { Calendar, ChevronRight, Clock3, PlusCircle, Receipt, Sparkles } from 'lucide-react';
 import { Container } from '@/components/layout/Container';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -18,109 +18,154 @@ interface GroupData {
   created_at: string;
 }
 
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [groups, setGroups] = useState<GroupData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
       const data = await getGroups();
       setGroups(data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || 'Gagal memuat daftar histori patungan.');
+      setError(err instanceof Error ? err.message : 'Gagal memuat daftar histori patungan.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchGroups();
-  }, []);
+    void fetchGroups();
+  }, [fetchGroups]);
+
+  const latestGroup = groups[0];
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-stone-50 py-12">
+      <div className="min-h-screen py-12">
         <LoadingState message="Memuat riwayat sesi patungan..." />
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-stone-50 py-10">
-      <Container className="max-w-4xl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-black text-stone-900">Riwayat Patungan</h1>
-            <p className="mt-1 text-sm text-stone-500">
-              Lihat, kelola, dan bagikan kembali sesi split bill yang telah Anda buat.
-            </p>
+    <main className="min-h-screen py-8 sm:py-10">
+      <Container className="max-w-5xl">
+        <section className="overflow-hidden rounded-[32px] border border-green-200/80 bg-white shadow-[0_20px_60px_rgba(22,101,52,0.10)]">
+          <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_320px] lg:items-center">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-black text-green-800">
+                <Sparkles size={14} />
+                Dashboard patungan
+              </span>
+              <h1 className="mt-4 text-3xl font-black tracking-tight text-stone-950 sm:text-4xl">
+                Riwayat sesi yang mudah dibuka lagi.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500">
+                Lanjutkan pengelolaan bill, salin link share, atau buat sesi baru ketika mulai patungan berikutnya.
+              </p>
+            </div>
+
+            <div className="rounded-[28px] border border-green-200 bg-green-50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-green-700">Ringkasan</p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <p className="text-3xl font-black text-stone-950">{groups.length}</p>
+                  <p className="mt-1 text-xs font-bold text-stone-500">Sesi tersimpan</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4 shadow-sm">
+                  <Clock3 size={22} className="text-green-700" />
+                  <p className="mt-2 text-xs font-bold leading-5 text-stone-600">
+                    {latestGroup ? `Terakhir ${formatDate(latestGroup.created_at)}` : 'Belum ada sesi'}
+                  </p>
+                </div>
+              </div>
+              <Link href="/new" className="mt-4 block">
+                <Button className="w-full">
+                  <PlusCircle size={18} />
+                  Buat Sesi Baru
+                </Button>
+              </Link>
+            </div>
           </div>
-          <Link href="/new" className="shrink-0">
-            <Button className="min-h-11 rounded-2xl text-xs gap-1.5 bg-green-600 hover:bg-green-700 text-white font-bold">
-              <PlusCircle size={16} />
-              Sesi Baru
-            </Button>
-          </Link>
-        </div>
+        </section>
 
         {error && (
-          <div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700 mb-6">
+          <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
             {error}
           </div>
         )}
 
-        {groups.length === 0 ? (
-          <EmptyState
-            icon={Receipt}
-            title="Belum ada riwayat patungan"
-            description="Anda belum membuat sesi split bill. Klik tombol di bawah untuk mulai menghitung patungan pertama Anda dengan cepat."
-            actionLabel="Mulai Split Bill Baru"
-            onAction={() => router.push('/new')}
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {groups.map((group) => (
-              <Link key={group.id} href={`/bill/${group.id}`} className="group block">
-                <Card className="h-full border-stone-200 bg-white p-5 hover:border-green-300 hover:shadow-md transition duration-200 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="grid size-8 place-items-center rounded-xl bg-green-50 text-green-700 shrink-0">
-                        <Receipt size={16} />
-                      </span>
-                      <h3 className="font-black text-stone-900 text-sm truncate group-hover:text-green-700 transition">
-                        {group.name}
-                      </h3>
-                    </div>
-                    {group.description && (
-                      <p className="text-xs text-stone-500 leading-normal line-clamp-2">
-                        {group.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-3 text-[10px] text-stone-400">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar size={12} />
-                      {new Date(group.created_at).toLocaleDateString('id-ID', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </span>
-                    <span className="flex items-center gap-1 font-bold text-green-700 opacity-0 group-hover:opacity-100 transition">
-                      Buka Sesi
-                      <ChevronRight size={12} />
-                    </span>
-                  </div>
-                </Card>
-              </Link>
-            ))}
+        <section className="mt-8">
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-stone-950">Semua riwayat</h2>
+              <p className="mt-1 text-sm text-stone-500">Pilih sesi untuk melihat detail, anggota, item, dan settlement.</p>
+            </div>
           </div>
-        )}
+
+          {groups.length === 0 ? (
+            <EmptyState
+              icon={Receipt}
+              title="Belum ada riwayat patungan"
+              description="Anda belum membuat sesi split bill. Mulai dari sesi baru atau scan struk dari halaman utama."
+              actionLabel="Mulai Split Bill Baru"
+              onAction={() => router.push('/new')}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {groups.map((group) => (
+                <Link key={group.id} href={`/bill/${group.id}`} className="group block">
+                  <Card className="flex h-full flex-col justify-between p-5 transition duration-200 hover:-translate-y-0.5 hover:border-green-300 hover:shadow-[0_20px_50px_rgba(22,101,52,0.12)]">
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-green-50 text-green-700">
+                          <Receipt size={20} />
+                        </span>
+                        <div className="min-w-0">
+                          <h3 className="truncate text-base font-black text-stone-900 transition group-hover:text-green-700">
+                            {group.name}
+                          </h3>
+                          <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-stone-400">
+                            <Calendar size={13} />
+                            {formatDate(group.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                      {group.description ? (
+                        <p className="line-clamp-2 text-sm leading-6 text-stone-500">{group.description}</p>
+                      ) : (
+                        <p className="text-sm leading-6 text-stone-400">Belum ada deskripsi untuk sesi ini.</p>
+                      )}
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-between border-t border-stone-100 pt-4">
+                      <span className="rounded-full bg-stone-100 px-3 py-1 text-[11px] font-black text-stone-500">
+                        Split bill
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs font-black text-green-700">
+                        Buka sesi
+                        <ChevronRight size={14} />
+                      </span>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
       </Container>
     </main>
   );
